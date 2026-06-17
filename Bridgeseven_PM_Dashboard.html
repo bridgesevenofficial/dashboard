@@ -26,10 +26,12 @@
 </script>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<!-- Babel 버전 고정: 자동 업그레이드로 JSX 변환 방식이 바뀌어 페이지가 깨지는 문제 방지 -->
+<script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
 <!-- Firebase v9 Compat (CDN) -->
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
 <style>
   :root {
     --color-bg: #F7F8FA;
@@ -79,6 +81,8 @@
 <div id="root"></div>
 
 <script type="text/babel">
+/* @jsxRuntime classic */
+// JSX를 React.createElement 방식(구방식)으로 강제 변환 → 전역 React(UMD)와 호환, import 미발생
 const { useState, useMemo, useEffect, useRef, useContext, createContext } = React;
 
 // =================================================================
@@ -105,10 +109,12 @@ const FIREBASE_ENABLED = !!(FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.databaseUR
 const FIREBASE_NS = "bridgeseven"; // 데이터 저장 네임스페이스
 
 let fbDb = null;
+let fbAuth = null;   // Firebase 인증(로그인) 핸들
 if (FIREBASE_ENABLED) {
   try {
     firebase.initializeApp(FIREBASE_CONFIG);
     fbDb = firebase.database();
+    fbAuth = firebase.auth();
     console.log("✓ Firebase 동기화 모드");
   } catch (e) {
     console.error("Firebase 초기화 실패:", e);
@@ -4479,9 +4485,84 @@ const styleEl = document.createElement("style");
 styleEl.textContent = formInputCSS;
 document.head.appendChild(styleEl);
 
+// =================================================================
+// 🔐 로그인 화면 (Firebase 이메일/비밀번호 인증)
+// =================================================================
+function LoginScreen() {
+  const [email, setEmail] = useState("");
+  const [pw, setPw] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = (e) => {
+    e.preventDefault();
+    if (!email.trim() || !pw) { setErr("이메일과 비밀번호를 입력하세요."); return; }
+    setErr(""); setBusy(true);
+    fbAuth.signInWithEmailAndPassword(email.trim(), pw)
+      .catch((ex) => {
+        const code = (ex && ex.code) || "";
+        if (code === "auth/invalid-email") setErr("이메일 형식이 올바르지 않습니다.");
+        else if (code === "auth/user-disabled") setErr("비활성화된 계정입니다.");
+        else if (code === "auth/too-many-requests") setErr("시도가 너무 많습니다. 잠시 후 다시 시도하세요.");
+        else setErr("이메일 또는 비밀번호가 올바르지 않습니다.");
+      })
+      .finally(() => setBusy(false));
+  };
+
+  const inputStyle = { width: "100%", boxSizing: "border-box", padding: "11px 13px", marginBottom: "14px", border: "1px solid var(--color-border)", borderRadius: "10px", fontSize: "14px", outline: "none", fontFamily: "inherit" };
+  const labelStyle = { display: "block", fontSize: "13px", fontWeight: 600, color: "var(--color-text)", marginBottom: "6px" };
+
+  return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--color-bg)", padding: "20px" }}>
+      <form onSubmit={submit} style={{ width: "100%", maxWidth: "360px", background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: "16px", padding: "32px", boxShadow: "0 8px 24px rgba(0,0,0,0.06)" }}>
+        <div style={{ textAlign: "center", marginBottom: "26px" }}>
+          <div style={{ fontSize: "22px", fontWeight: 800, color: "var(--color-text)" }}>Bridge7 <span style={{ color: "var(--color-primary)" }}>PM</span></div>
+          <div style={{ fontSize: "13px", color: "var(--color-text-soft)", marginTop: "6px" }}>로그인 후 이용할 수 있습니다</div>
+        </div>
+        <label style={labelStyle}>이메일</label>
+        <input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} style={inputStyle} placeholder="name@bridge7.co.kr" />
+        <label style={labelStyle}>비밀번호</label>
+        <input type="password" autoComplete="current-password" value={pw} onChange={(e) => setPw(e.target.value)} style={inputStyle} placeholder="비밀번호" />
+        {err ? <div style={{ color: "var(--color-danger)", fontSize: "13px", marginBottom: "14px" }}>{err}</div> : null}
+        <button type="submit" disabled={busy} style={{ width: "100%", padding: "12px", border: "none", borderRadius: "10px", background: "var(--color-primary)", color: "#fff", fontSize: "15px", fontWeight: 700, cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1, fontFamily: "inherit" }}>
+          {busy ? "로그인 중…" : "로그인"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+// 로그인 여부에 따라 대시보드 접근을 통제하는 래퍼
+function AuthGate({ children }) {
+  const [user, setUser] = useState(undefined); // undefined=확인중, null=비로그인
+  useEffect(() => {
+    if (!FIREBASE_ENABLED || !fbAuth) { setUser(null); return; }
+    const unsub = fbAuth.onAuthStateChanged((u) => setUser(u));
+    return () => unsub();
+  }, []);
+
+  // Firebase 미설정(localStorage 전용) 모드면 로그인 없이 통과
+  if (!FIREBASE_ENABLED || !fbAuth) return children;
+
+  if (user === undefined) {
+    return <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-text-soft)", background: "var(--color-bg)" }}>불러오는 중…</div>;
+  }
+  if (!user) return <LoginScreen />;
+
+  return (
+    <React.Fragment>
+      {children}
+      <button onClick={() => fbAuth.signOut()} title={user.email || ""}
+        style={{ position: "fixed", bottom: "16px", left: "16px", zIndex: 9999, background: "var(--color-surface)", border: "1px solid var(--color-border)", borderRadius: "999px", padding: "8px 14px", fontSize: "12px", color: "var(--color-text-soft)", boxShadow: "0 2px 8px rgba(0,0,0,0.08)", cursor: "pointer", fontFamily: "inherit" }}>
+        ⏻ 로그아웃{user.email ? " (" + user.email + ")" : ""}
+      </button>
+    </React.Fragment>
+  );
+}
+
 // 마운트
 const root = ReactDOM.createRoot(document.getElementById("root"));
-root.render(<App />);
+root.render(<AuthGate><App /></AuthGate>);
 </script>
 </body>
 </html>
