@@ -527,6 +527,7 @@ function App() {
   const [teams, setTeams] = useState(INITIAL_TEAMS);
   const [members, setMembers] = useState(INITIAL_MEMBERS);
   const [vacations, setVacations] = useState([]);
+  const [workLogs, setWorkLogs] = useState([]);   // 개인별 일일 업무일지
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [showMeetingModal, setShowMeetingModal] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
@@ -544,9 +545,9 @@ function App() {
   const [syncStatus, setSyncStatus] = useState(FIREBASE_ENABLED ? "connecting" : "local");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   // 원격 → 로컬 setState 시 다시 원격으로 echo 방지용 플래그
-  const fromRemote = useRef({ projects: false, meetings: false, teams: false, members: false, vacations: false });
+  const fromRemote = useRef({ projects: false, meetings: false, teams: false, members: false, vacations: false, workLogs: false });
   // Firebase에서 데이터를 받기 전까지 push 금지 (덮어쓰기 race condition 방지)
-  const firebaseReady = useRef({ projects: false, meetings: false, teams: false, members: false, vacations: false });
+  const firebaseReady = useRef({ projects: false, meetings: false, teams: false, members: false, vacations: false, workLogs: false });
   const [isRepMode, setIsRepMode] = useState(false);
   const [showRepLogin, setShowRepLogin] = useState(false);
   const [toast, setToast] = useState(null);
@@ -566,6 +567,7 @@ function App() {
         if (data.teams) setTeams(data.teams);
         if (data.members) setMembers(data.members);
         if (data.vacations) setVacations(data.vacations);
+        if (data.workLogs) setWorkLogs(data.workLogs);
       }
     } catch {}
   }, []);
@@ -573,21 +575,21 @@ function App() {
   useEffect(() => {
     if (FIREBASE_ENABLED) return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ projects, meetings, teams, members, vacations, savedAt: new Date().toISOString() }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ projects, meetings, teams, members, vacations, workLogs, savedAt: new Date().toISOString() }));
     } catch {}
-  }, [projects, meetings, teams, members, vacations]);
+  }, [projects, meetings, teams, members, vacations, workLogs]);
 
   // Firebase 실시간 동기화 (양방향)
   useEffect(() => {
     if (!FIREBASE_ENABLED || !fbDb) return;
-    const setters = { projects: setProjects, meetings: setMeetings, teams: setTeams, members: setMembers, vacations: setVacations };
+    const setters = { projects: setProjects, meetings: setMeetings, teams: setTeams, members: setMembers, vacations: setVacations, workLogs: setWorkLogs };
     const migrators = {
       projects: migrateProjects, meetings: migrateMeetings,
-      teams: (x) => x, members: (x) => x, vacations: (x) => x || [],
+      teams: (x) => x, members: (x) => x, vacations: (x) => x || [], workLogs: (x) => x || [],
     };
     const initials = {
       projects: migrateProjects(INITIAL_PROJECTS), meetings: migrateMeetings(INITIAL_MEETINGS),
-      teams: INITIAL_TEAMS, members: INITIAL_MEMBERS, vacations: [],
+      teams: INITIAL_TEAMS, members: INITIAL_MEMBERS, vacations: [], workLogs: [],
     };
     const refs = {};
     const handlers = {};
@@ -659,6 +661,12 @@ function App() {
     if (fromRemote.current.vacations) { fromRemote.current.vacations = false; return; }
     fbDb.ref(`${FIREBASE_NS}/vacations`).set(vacations).catch(e => console.error("vacations sync 실패:", e));
   }, [vacations]);
+  useEffect(() => {
+    if (!FIREBASE_ENABLED || !fbDb) return;
+    if (!firebaseReady.current.workLogs) return;
+    if (fromRemote.current.workLogs) { fromRemote.current.workLogs = false; return; }
+    fbDb.ref(`${FIREBASE_NS}/workLogs`).set(workLogs).catch(e => console.error("workLogs sync 실패:", e));
+  }, [workLogs]);
 
   const showToast = (msg, type = "info") => {
     setToast({ msg, type });
@@ -718,6 +726,17 @@ function App() {
     if (!confirm("이 휴가 기록을 삭제할까요?")) return;
     setVacations(vs => vs.filter(x => x.id !== id));
     showToast("휴가 기록이 삭제되었습니다", "info");
+  };
+
+  // ====== 업무일지 CRUD ======
+  const addWorkLog = (entry) => {
+    const id = Math.max(0, ...workLogs.map(x => x.id || 0)) + 1;
+    setWorkLogs(ls => [...ls, { ...entry, id }]);
+    showToast("업무일지가 추가되었습니다", "success");
+  };
+  const deleteWorkLog = (id) => {
+    setWorkLogs(ls => ls.filter(x => x.id !== id));
+    showToast("업무일지가 삭제되었습니다", "info");
   };
 
   // 팀 CRUD
@@ -893,6 +912,7 @@ function App() {
     { key: "projects",  label: "프로젝트",    icon: "folder" },
     { key: "kanban",    label: "칸반 보드",   icon: "kanban" },
     { key: "meetings",  label: "회의록",      icon: "calendar" },
+    { key: "worklog",   label: "업무일지",    icon: "clock" },
     { key: "weekly",    label: "주차별 요약", icon: "chart" },
     { key: "reports",   label: "보고서",      icon: "chart" },
     { key: "teams",     label: "팀 관리",     icon: "user" },
@@ -1036,6 +1056,10 @@ function App() {
             onAdd={(projId) => { setEditingMeeting(null); setDefaultMeetingProject(projId); setShowMeetingModal(true); }}
             onEdit={(m) => { setEditingMeeting(m); setShowMeetingModal(true); }}
             onDelete={deleteMeeting} />
+        )}
+        {view === "worklog" && (
+          <WorkLogView members={members} teams={teams} projects={projects}
+            workLogs={workLogs} onAdd={addWorkLog} onDelete={deleteWorkLog} />
         )}
         {view === "weekly" && (
           <WeeklyView projects={projects} meetings={meetings}
@@ -2232,6 +2256,200 @@ const StatBlock = ({ label, value, color, icon }) => (
   </div>
 );
 
+// ============== 업무일지 뷰 (개인별 작성 + 팀/담당자별 주간 표) ==============
+function toLocalISO(d) {
+  const z = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  return z.toISOString().slice(0, 10);
+}
+function mondayOf(date) {
+  const d = new Date(date);
+  const day = (d.getDay() + 6) % 7; // 월요일=0
+  d.setDate(d.getDate() - day);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+function WorkLogView({ members, teams, projects, workLogs, onAdd, onDelete }) {
+  const today = new Date();
+  const todayISO = toLocalISO(today);
+
+  // ----- 작성 폼 -----
+  const [memberName, setMemberName] = useState((members[0] && members[0].name) || "");
+  const [projectId, setProjectId] = useState("");
+  const [date, setDate] = useState(todayISO);
+  const [task, setTask] = useState("");
+
+  const submit = () => {
+    if (!memberName) { alert("담당자를 선택하세요."); return; }
+    if (!task.trim()) { alert("할 일을 입력하세요."); return; }
+    const proj = projects.find((p) => String(p.id) === String(projectId));
+    onAdd({
+      memberName,
+      projectId: proj ? proj.id : null,
+      projectName: proj ? proj.name : "",
+      date,
+      task: task.trim(),
+    });
+    setTask("");
+  };
+
+  // ----- 주간 표 -----
+  const [weekStart, setWeekStart] = useState(() => mondayOf(today));
+  const weekDays = useMemo(() => {
+    const arr = [];
+    for (let i = 0; i < 7; i++) { const d = new Date(weekStart); d.setDate(d.getDate() + i); arr.push(d); }
+    return arr;
+  }, [weekStart]);
+  const weekISO = weekDays.map(toLocalISO);
+  const shiftWeek = (n) => { const d = new Date(weekStart); d.setDate(d.getDate() + n * 7); setWeekStart(d); };
+  const dayLabels = ["월", "화", "수", "목", "금", "토", "일"];
+
+  // 담당자명+날짜 → 일지 목록
+  const logIndex = useMemo(() => {
+    const idx = {};
+    (workLogs || []).forEach((l) => {
+      const k = l.memberName + "|" + l.date;
+      (idx[k] = idx[k] || []).push(l);
+    });
+    return idx;
+  }, [workLogs]);
+
+  // 팀 순서대로 팀원 그룹화 (팀에 속하지 않은 인원은 '기타'로)
+  const teamGroups = useMemo(() => {
+    const ordered = [...teams].sort((a, b) => (a.order || 0) - (b.order || 0));
+    const groups = ordered.map((t) => ({ team: t, list: members.filter((m) => m.teamId === t.id) }));
+    const others = members.filter((m) => !teams.some((t) => t.id === m.teamId));
+    if (others.length) groups.push({ team: { id: "_etc", name: "기타", color: "#9CA3AF" }, list: others });
+    return groups.filter((g) => g.list.length);
+  }, [teams, members]);
+
+  const recentForMember = useMemo(() =>
+    (workLogs || [])
+      .filter((l) => l.memberName === memberName)
+      .sort((a, b) => b.date.localeCompare(a.date) || ((b.id || 0) - (a.id || 0)))
+      .slice(0, 8),
+    [workLogs, memberName]);
+
+  return (
+    <div className="space-y-6">
+      {/* 작성 폼 */}
+      <div className="bg-white border border-gray-200 rounded-xl p-4 md:p-5">
+        <h2 className="font-semibold text-gray-900 mb-3">업무일지 작성</h2>
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+          <div className="md:col-span-2">
+            <label className="block text-xs font-semibold text-gray-600 mb-1">담당자</label>
+            <select value={memberName} onChange={(e) => setMemberName(e.target.value)} className="form-input">
+              {members.map((m) => <option key={m.id}>{m.name}</option>)}
+            </select>
+          </div>
+          <div className="md:col-span-3">
+            <label className="block text-xs font-semibold text-gray-600 mb-1">프로젝트</label>
+            <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className="form-input">
+              <option value="">(프로젝트 외 / 기타)</option>
+              {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-xs font-semibold text-gray-600 mb-1">날짜</label>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="form-input" />
+          </div>
+          <div className="md:col-span-4">
+            <label className="block text-xs font-semibold text-gray-600 mb-1">할 일 (한 줄)</label>
+            <input type="text" value={task} onChange={(e) => setTask(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
+              className="form-input" placeholder="예: 메인 페이지 퍼블리싱 완료" />
+          </div>
+          <div className="md:col-span-1 flex items-end">
+            <button onClick={submit} className="w-full h-9 bg-orange-500 hover:bg-orange-600 text-white rounded-md text-sm font-semibold transition">추가</button>
+          </div>
+        </div>
+
+        {recentForMember.length > 0 && (
+          <div className="mt-4">
+            <div className="text-xs font-semibold text-gray-500 mb-2">{memberName}님 최근 일지</div>
+            <div className="space-y-1">
+              {recentForMember.map((l) => (
+                <div key={l.id} className="flex items-center gap-2 text-sm bg-gray-50 rounded-md px-3 py-1.5">
+                  <span className="text-xs text-gray-400 font-mono">{l.date}</span>
+                  {l.projectName ? <span className="text-[11px] px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 font-medium whitespace-nowrap">{l.projectName}</span> : null}
+                  <span className="flex-1 text-gray-700 truncate">{l.task}</span>
+                  <button onClick={() => onDelete(l.id)} className="text-gray-300 hover:text-red-500 flex-shrink-0" title="삭제"><Icon name="trash" size={14} /></button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 팀/담당자별 주간 표 */}
+      <div className="bg-white border border-gray-200 rounded-xl p-4 md:p-5">
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+          <h2 className="font-semibold text-gray-900">팀·담당자별 주간 업무일지</h2>
+          <div className="flex items-center gap-1">
+            <button onClick={() => shiftWeek(-1)} className="px-2 h-8 rounded-md border border-gray-200 hover:bg-gray-50" title="이전 주"><Icon name="chevronLeft" size={16} /></button>
+            <button onClick={() => setWeekStart(mondayOf(new Date()))} className="px-3 h-8 rounded-md border border-gray-200 text-xs font-medium hover:bg-gray-50">이번 주</button>
+            <button onClick={() => shiftWeek(1)} className="px-2 h-8 rounded-md border border-gray-200 hover:bg-gray-50" title="다음 주"><Icon name="chevronRight" size={16} /></button>
+            <span className="ml-2 text-xs text-gray-500 font-mono">{weekISO[0]} ~ {weekISO[6]}</span>
+          </div>
+        </div>
+        <div className="overflow-x-auto scrollbar-thin">
+          <table className="w-full border-collapse text-sm" style={{ minWidth: "920px" }}>
+            <thead>
+              <tr>
+                <th className="sticky left-0 z-10 bg-gray-50 border border-gray-200 px-3 py-2 text-left text-xs font-semibold text-gray-600" style={{ width: "120px" }}>담당자</th>
+                {weekDays.map((d, i) => {
+                  const iso = weekISO[i];
+                  const isToday = iso === todayISO;
+                  return (
+                    <th key={iso} className={`border border-gray-200 px-2 py-2 text-xs font-semibold ${isToday ? "bg-orange-50 text-orange-700" : "bg-gray-50 text-gray-600"}`}>
+                      {dayLabels[i]} <span className="font-mono font-normal">{iso.slice(5)}</span>
+                    </th>
+                  );
+                })}
+              </tr>
+            </thead>
+            <tbody>
+              {teamGroups.map((g) => (
+                <React.Fragment key={g.team.id}>
+                  <tr>
+                    <td colSpan={8} className="border border-gray-200 px-3 py-1.5 text-xs font-bold text-white" style={{ background: g.team.color || "#9CA3AF" }}>{g.team.name}</td>
+                  </tr>
+                  {g.list.map((m) => (
+                    <tr key={m.id}>
+                      <td className="sticky left-0 z-10 bg-white border border-gray-200 px-3 py-2 align-top whitespace-nowrap">
+                        <div className="font-medium text-gray-800">{m.name}</div>
+                        {m.title ? <div className="text-[10px] text-gray-400">{m.title}</div> : null}
+                      </td>
+                      {weekISO.map((iso) => {
+                        const logs = logIndex[m.name + "|" + iso] || [];
+                        return (
+                          <td key={iso} className="border border-gray-200 px-1.5 py-1.5 align-top" style={{ minWidth: "110px" }}>
+                            <div className="space-y-1">
+                              {logs.map((l) => (
+                                <div key={l.id} className="group text-[11px] leading-snug bg-gray-50 rounded px-1.5 py-1">
+                                  {l.projectName ? <div className="text-orange-600 font-semibold truncate" title={l.projectName}>{l.projectName}</div> : null}
+                                  <div className="flex items-start gap-1">
+                                    <span className="flex-1 text-gray-700 break-words">{l.task}</span>
+                                    <button onClick={() => onDelete(l.id)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-500 leading-none flex-shrink-0" title="삭제">×</button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </React.Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="text-[11px] text-gray-400 mt-2">셀 위에 마우스를 올리면 × 버튼으로 일지를 삭제할 수 있습니다. 월요일~일요일 기준입니다.</p>
+      </div>
+    </div>
+  );
+}
+
 // ============== 모달: 프로젝트 ==============
 function ProjectModal({ project, onClose, onSave }) {
   const { members, teams } = useContext(MembersContext);
@@ -2286,8 +2504,10 @@ function ProjectModal({ project, onClose, onSave }) {
           </select>
         </Field>
         <Field label="Dev 담당">
-          <input type="text" value={form.dev} onChange={(e) => set("dev", e.target.value)}
-            className="form-input" placeholder="예: 박예림 또는 박예림, 이세련" />
+          <select value={form.dev} onChange={(e) => set("dev", e.target.value)} className="form-input">
+            <option value="">선택</option>
+            {members.map((m) => <option key={m.id}>{m.name}</option>)}
+          </select>
         </Field>
         <Field label="시작일">
           <input type="date" value={form.startDate} onChange={(e) => set("startDate", e.target.value)} className="form-input" />
