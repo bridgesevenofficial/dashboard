@@ -436,6 +436,7 @@ const Icon = ({ name, size = 18, className = "" }) => {
     info: <><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 7v.01" /></>,
     settings: <><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></>,
     menu: <><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></>,
+    timeline: <><circle cx="5" cy="6" r="2" /><line x1="7" y1="6" x2="15" y2="6" /><circle cx="10" cy="12" r="2" /><line x1="12" y1="12" x2="20" y2="12" /><circle cx="7" cy="18" r="2" /><line x1="9" y1="18" x2="17" y2="18" /></>,
   };
   return (
     <svg
@@ -554,6 +555,7 @@ function App() {
   const [overdueModal, setOverdueModal] = useState(false);
   const [syncStatus, setSyncStatus] = useState(FIREBASE_ENABLED ? "connecting" : "local");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [openNavGroup, setOpenNavGroup] = useState(null); // 2뎁스 상단 메뉴 드롭다운
   // 원격 → 로컬 setState 시 다시 원격으로 echo 방지용 플래그
   const fromRemote = useRef({ projects: false, meetings: false, teams: false, members: false, vacations: false, workLogs: false });
   // Firebase에서 데이터를 받기 전까지 push 금지 (덮어쓰기 race condition 방지)
@@ -917,15 +919,29 @@ function App() {
     });
   }, [projects, search, filterPM, filterStatus, filterType]);
 
-  const navItems = [
-    { key: "dashboard", label: "대시보드",   icon: "dashboard" },
-    { key: "projects",  label: "프로젝트",    icon: "folder" },
-    { key: "kanban",    label: "칸반 보드",   icon: "kanban" },
-    { key: "meetings",  label: "회의록",      icon: "calendar" },
-    { key: "worklog",   label: "업무일지",    icon: "clock" },
-    { key: "weekly",    label: "주차별 요약", icon: "chart" },
-    { key: "reports",   label: "보고서",      icon: "chart" },
-    { key: "teams",     label: "팀 관리",     icon: "user" },
+  // 2뎁스 상단 메뉴: 구성별 그룹
+  const navGroups = [
+    { key: "dashboard", label: "대시보드", icon: "dashboard" },
+    {
+      key: "grp-project", label: "프로젝트", icon: "folder", children: [
+        { key: "projects", label: "프로젝트 목록", icon: "folder" },
+        { key: "kanban",   label: "칸반 보드",     icon: "kanban" },
+        { key: "meetings", label: "회의록",        icon: "calendar" },
+      ],
+    },
+    {
+      key: "grp-team", label: "팀 · 업무", icon: "user", children: [
+        { key: "worklog",  label: "업무일지",     icon: "clock" },
+        { key: "schedule", label: "담당자 일정",  icon: "timeline" },
+        { key: "teams",    label: "팀 관리",      icon: "user" },
+      ],
+    },
+    {
+      key: "grp-report", label: "리포트", icon: "chart", children: [
+        { key: "weekly",  label: "주차별 요약", icon: "chart" },
+        { key: "reports", label: "보고서",      icon: "chart" },
+      ],
+    },
     { key: "clientPortal", label: "Client Portal", icon: "external",
       href: "https://script.google.com/a/macros/b7official.com/s/AKfycbwByh8Ox7ZfbPpeI7McwETKeaeEodjDjAHxB_LYpjqO_nxGm1J7qV-xAqnXobYj0ja1eg/exec" },
   ];
@@ -948,33 +964,64 @@ function App() {
             <div className="hidden md:block"><SyncIndicator status={syncStatus} /></div>
           </div>
 
-          {/* 데스크톱 nav (lg 이상) */}
+          {/* 데스크톱 nav (lg 이상) - 2뎁스 드롭다운 */}
           <nav className="hidden lg:flex items-center gap-1 flex-1 justify-center">
-            {navItems.map((n) => (
-              n.href ? (
-                <a
-                  key={n.key}
-                  href={n.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 px-2 xl:px-3 h-9 rounded-md text-xs xl:text-sm font-medium transition text-gray-600 hover:bg-gray-100"
-                >
-                  <Icon name={n.icon} size={16} />
-                  <span className="hidden xl:inline">{n.label}</span>
-                </a>
-              ) : (
-                <button
-                  key={n.key}
-                  onClick={() => setView(n.key)}
-                  className={`flex items-center gap-2 px-2 xl:px-3 h-9 rounded-md text-xs xl:text-sm font-medium transition ${
-                    view === n.key ? "bg-orange-50 text-orange-700" : "text-gray-600 hover:bg-gray-100"
-                  }`}
-                >
-                  <Icon name={n.icon} size={16} />
-                  <span className="hidden xl:inline">{n.label}</span>
-                </button>
-              )
-            ))}
+            {navGroups.map((n) => {
+              if (n.href) {
+                return (
+                  <a key={n.key} href={n.href} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 px-2 xl:px-3 h-9 rounded-md text-xs xl:text-sm font-medium transition text-gray-600 hover:bg-gray-100">
+                    <Icon name={n.icon} size={16} />
+                    <span className="hidden xl:inline">{n.label}</span>
+                  </a>
+                );
+              }
+              if (!n.children) {
+                return (
+                  <button key={n.key} onClick={() => { setView(n.key); setOpenNavGroup(null); }}
+                    className={`flex items-center gap-1.5 px-2 xl:px-3 h-9 rounded-md text-xs xl:text-sm font-medium transition ${
+                      view === n.key ? "bg-orange-50 text-orange-700" : "text-gray-600 hover:bg-gray-100"
+                    }`}>
+                    <Icon name={n.icon} size={16} />
+                    <span className="hidden xl:inline">{n.label}</span>
+                  </button>
+                );
+              }
+              const isActive = n.children.some((c) => c.key === view);
+              const isOpen = openNavGroup === n.key;
+              const activeChild = n.children.find((c) => c.key === view);
+              return (
+                <div key={n.key} className="relative">
+                  <button onClick={() => setOpenNavGroup(isOpen ? null : n.key)}
+                    className={`flex items-center gap-1.5 px-2 xl:px-3 h-9 rounded-md text-xs xl:text-sm font-medium transition ${
+                      isActive ? "bg-orange-50 text-orange-700" : "text-gray-600 hover:bg-gray-100"
+                    }`}>
+                    <Icon name={n.icon} size={16} />
+                    <span className="hidden xl:inline">
+                      {n.label}
+                      {isActive && activeChild && <span className="text-[10px] font-normal opacity-70"> · {activeChild.label}</span>}
+                    </span>
+                    <Icon name="chevronDown" size={12} className={`transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                  </button>
+                  {isOpen && (
+                    <React.Fragment>
+                      <div className="fixed inset-0 z-40" onClick={() => setOpenNavGroup(null)} />
+                      <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-xl py-1 min-w-[180px] z-50">
+                        {n.children.map((c) => (
+                          <button key={c.key} onClick={() => { setView(c.key); setOpenNavGroup(null); }}
+                            className={`w-full flex items-center gap-2.5 px-3.5 h-10 text-sm text-left transition ${
+                              view === c.key ? "bg-orange-50 text-orange-700 font-semibold" : "text-gray-700 hover:bg-gray-50"
+                            }`}>
+                            <Icon name={c.icon} size={15} />
+                            {c.label}
+                          </button>
+                        ))}
+                      </div>
+                    </React.Fragment>
+                  )}
+                </div>
+              );
+            })}
           </nav>
 
           {/* 우측 액션 (lg 이상에서만 보임) */}
@@ -1011,28 +1058,45 @@ function App() {
         {mobileMenuOpen && (
           <div className="lg:hidden border-t border-gray-200 bg-white shadow-md">
             <nav className="flex flex-col px-3 py-2">
-              {navItems.map((n) => (
-                n.href ? (
-                  <a key={n.key}
-                    href={n.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="flex items-center gap-3 px-3 h-11 rounded-md text-sm font-medium transition text-gray-700 hover:bg-gray-100">
-                    <Icon name={n.icon} size={18} />
-                    {n.label}
-                  </a>
-                ) : (
-                  <button key={n.key}
-                    onClick={() => { setView(n.key); setMobileMenuOpen(false); }}
-                    className={`flex items-center gap-3 px-3 h-11 rounded-md text-sm font-medium transition ${
-                      view === n.key ? "bg-orange-50 text-orange-700" : "text-gray-700 hover:bg-gray-100"
-                    }`}>
-                    <Icon name={n.icon} size={18} />
-                    {n.label}
-                  </button>
-                )
-              ))}
+              {navGroups.map((n) => {
+                if (n.href) {
+                  return (
+                    <a key={n.key} href={n.href} target="_blank" rel="noopener noreferrer"
+                      onClick={() => setMobileMenuOpen(false)}
+                      className="flex items-center gap-3 px-3 h-11 rounded-md text-sm font-medium transition text-gray-700 hover:bg-gray-100">
+                      <Icon name={n.icon} size={18} />
+                      {n.label}
+                    </a>
+                  );
+                }
+                if (!n.children) {
+                  return (
+                    <button key={n.key}
+                      onClick={() => { setView(n.key); setMobileMenuOpen(false); }}
+                      className={`flex items-center gap-3 px-3 h-11 rounded-md text-sm font-medium transition ${
+                        view === n.key ? "bg-orange-50 text-orange-700" : "text-gray-700 hover:bg-gray-100"
+                      }`}>
+                      <Icon name={n.icon} size={18} />
+                      {n.label}
+                    </button>
+                  );
+                }
+                return (
+                  <div key={n.key}>
+                    <div className="px-3 pt-3 pb-1 text-[11px] font-bold text-gray-400 uppercase tracking-wider">{n.label}</div>
+                    {n.children.map((c) => (
+                      <button key={c.key}
+                        onClick={() => { setView(c.key); setMobileMenuOpen(false); }}
+                        className={`w-full flex items-center gap-3 pl-6 pr-3 h-11 rounded-md text-sm font-medium transition ${
+                          view === c.key ? "bg-orange-50 text-orange-700" : "text-gray-700 hover:bg-gray-100"
+                        }`}>
+                        <Icon name={c.icon} size={18} />
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
+                );
+              })}
             </nav>
             <div className="border-t border-gray-100 px-3 py-2 flex flex-wrap items-center gap-1.5">
               {isRepMode ? (
@@ -1114,6 +1178,10 @@ function App() {
         )}
         {view === "reports" && (
           <ReportsView projects={projects} meetings={meetings}
+            onSelectProject={(p) => setDrawerProject(p)} />
+        )}
+        {view === "schedule" && (
+          <ScheduleView members={members} teams={teams} projects={projects}
             onSelectProject={(p) => setDrawerProject(p)} />
         )}
       </main>
@@ -3722,6 +3790,643 @@ const KpiCard = ({ label, value, sub, color }) => (
     </div>
   </div>
 );
+
+// ============== 담당자 일정 (리소스 스케줄) 뷰 ==============
+// 팀(teamId: 기획팀/구축팀/외주) 구분과 별도로, 담당자의 '직책(title)'을 기준으로
+// 기획/디자인/개발 3개 카테고리로 다시 묶는다. (구축팀 안에 디자인+개발이 섞여있기 때문)
+const RESOURCE_CATEGORIES = [
+  { key: "기획",   label: "기획",   color: "#3B82F6", match: (title) => /PM|기획/.test(title || "") },
+  { key: "디자인", label: "디자인", color: "#8B5CF6", match: (title) => /디자이너/.test(title || "") },
+  { key: "개발",   label: "개발",   color: "#10B981", match: (title) => /퍼블리셔|개발자|개발사/.test(title || "") },
+];
+const categorizeMember = (m) => {
+  const found = RESOURCE_CATEGORIES.find((c) => c.match(m.title));
+  return found ? found.key : "기타";
+};
+
+// 담당자 일정 전용 상태 색상 (예정=파란색 / 진행중=밝은 녹색 / 보류=그레이) - 완료는 타임라인에서 제외
+const SCHEDULE_STATUS_STYLES = {
+  "시작전": { bar: "#3B82F6", text: "#FFFFFF", chipBg: "#DBEAFE", chipText: "#1D4ED8", label: "예정" },
+  "진행중": { bar: "#22C55E", text: "#FFFFFF", chipBg: "#DCFCE7", chipText: "#15803D", label: "진행중" },
+  "보류":   { bar: "#9CA3AF", text: "#FFFFFF", chipBg: "#F3F4F6", chipText: "#6B7280", label: "보류" },
+};
+const scheduleStyle = (s) => SCHEDULE_STATUS_STYLES[s] || SCHEDULE_STATUS_STYLES["시작전"];
+// 종료일 M/D 표기
+const fmtMD = (iso) => iso ? `${Number(iso.slice(5, 7))}/${Number(iso.slice(8, 10))}` : "";
+
+// 담당자의 업무량/진척도 요약
+const ownerWorkload = (rows) => {
+  const active = rows.filter((r) => r.status === "진행중").length;
+  const planned = rows.filter((r) => r.status === "시작전").length;
+  const done = rows.filter((r) => r.status === "완료").length;
+  const total = rows.length;
+  return {
+    active, planned, done, total,
+    remaining: active + planned,
+    progress: total ? Math.round((done / total) * 100) : 0,
+  };
+};
+
+// 프로젝트 안의 마일스톤을 평탄화 (담당자가 지정된 것만 대상)
+const flattenMilestones = (projects) => {
+  const rows = [];
+  projects.forEach((p) => {
+    (p.milestones || []).forEach((m) => {
+      if (!m.owner) return;
+      rows.push({
+        key: `${p.id}-${m.id}`,
+        projectId: p.id,
+        projectName: p.name,
+        projectType: p.type,
+        name: m.name,
+        startDate: m.startDate,
+        endDate: m.endDate,
+        status: m.status,
+        owner: m.owner,
+        important: !!m.important,
+      });
+    });
+  });
+  return rows;
+};
+
+const addDaysISO = (iso, n) => {
+  const d = new Date(iso);
+  d.setDate(d.getDate() + n);
+  return toLocalISO(d);
+};
+
+// 기간 프리셋 → { start, end } (YYYY-MM-DD), "전체 기간"이면 null
+const presetRangeISO = (preset) => {
+  const today = new Date();
+  const y = today.getFullYear(), mo = today.getMonth();
+  const iso = (dt) => toLocalISO(dt);
+  if (preset === "thisMonth") return { start: iso(new Date(y, mo, 1)), end: iso(new Date(y, mo + 1, 0)) };
+  if (preset === "nextMonth") return { start: iso(new Date(y, mo + 1, 1)), end: iso(new Date(y, mo + 2, 0)) };
+  if (preset === "next3") return { start: iso(new Date(y, mo, 1)), end: iso(new Date(y, mo + 3, 0)) };
+  return null;
+};
+
+// 마일스톤 기간이 주어진 range와 겹치는지
+const overlapsRange = (m, range) => {
+  if (!range) return true;
+  if (!m.startDate && !m.endDate) return false;
+  const s = m.startDate || m.endDate;
+  const e = m.endDate || m.startDate;
+  return s <= range.end && e >= range.start;
+};
+
+// 담당자의 '다음 배정 가능일' = 완료/보류가 아닌 마일스톤 중 가장 늦은 종료일
+const nextAvailableDate = (personRows) => {
+  const active = personRows.filter((m) => m.endDate && m.status !== "완료" && m.status !== "보류");
+  if (active.length === 0) return null; // 즉시 가능
+  return active.reduce((mx, m) => (m.endDate > mx ? m.endDate : mx), active[0].endDate);
+};
+
+// 겹치는 마일스톤을 여러 레인(줄)으로 나눠 배치 (간트 차트에서 겹침 방지)
+const assignLanes = (rows) => {
+  const sorted = [...rows].sort((a, b) => (a.startDate || a.endDate || "").localeCompare(b.startDate || b.endDate || ""));
+  const laneEnds = [];
+  const placed = [];
+  sorted.forEach((m) => {
+    const s = m.startDate || m.endDate;
+    let lane = laneEnds.findIndex((end) => s > end);
+    if (lane === -1) { lane = laneEnds.length; laneEnds.push(m.endDate || m.startDate); }
+    else { laneEnds[lane] = m.endDate || m.startDate; }
+    placed.push({ ...m, lane });
+  });
+  return { rows: placed, laneCount: Math.max(1, laneEnds.length) };
+};
+
+// 프로젝트 구분용 강조 색상 (막대 왼쪽 굵은 테두리 + 프로젝트 라벨에 사용)
+const PROJECT_ACCENTS = ["#F97316", "#8B5CF6", "#EC4899", "#14B8A6", "#EAB308", "#6366F1", "#EF4444", "#0EA5E9", "#84CC16", "#A855F7", "#D946EF", "#059669"];
+const projectAccent = (projectId) => PROJECT_ACCENTS[Math.abs(Number(projectId) || 0) % PROJECT_ACCENTS.length];
+
+// 프로젝트별로 레인을 묶어서 배치: 같은 줄 = 같은 프로젝트 (프로젝트 구분이 한눈에 가도록)
+const assignProjectLanes = (rows) => {
+  const groups = {};
+  rows.forEach((r) => { (groups[r.projectId] = groups[r.projectId] || []).push(r); });
+  const ordered = Object.values(groups).map((list) => ({
+    list,
+    firstStart: list.reduce((mn, r) => {
+      const s = r.startDate || r.endDate || "9999";
+      return s < mn ? s : mn;
+    }, "9999"),
+  })).sort((a, b) => a.firstStart.localeCompare(b.firstStart));
+  const placed = [];
+  let laneOffset = 0;
+  ordered.forEach((g) => {
+    const { rows: sub, laneCount } = assignLanes(g.list);
+    const sorted = [...sub].sort((a, b) => (a.startDate || a.endDate || "").localeCompare(b.startDate || b.endDate || ""));
+    const firstKey = sorted[0] && sorted[0].key;
+    sub.forEach((r) => placed.push({ ...r, lane: laneOffset + r.lane, showProject: r.key === firstKey }));
+    laneOffset += laneCount;
+  });
+  return { rows: placed, laneCount: Math.max(1, laneOffset) };
+};
+
+function ScheduleView({ members, teams, projects, onSelectProject }) {
+  const [mode, setMode] = useState("team"); // "team" | "person"
+  const [preset, setPreset] = useState("next3"); // next3 | thisMonth | nextMonth | all
+  const [personSearch, setPersonSearch] = useState("");
+  const [selectedPerson, setSelectedPerson] = useState(null);
+  const [hoverProj, setHoverProj] = useState(null); // 막대 hover 시 같은 프로젝트 하이라이트
+  const [statusFilter, setStatusFilter] = useState({ "시작전": true, "진행중": true, "보류": true }); // 상태별 필터 토글
+
+  const allRows = useMemo(() => flattenMilestones(projects), [projects]);
+  const range = useMemo(() => presetRangeISO(preset), [preset]);
+
+  // 타임라인에는 예정/진행중/보류만 표시 (완료는 제외) + 상태 필터 토글 적용
+  const visibleRows = useMemo(() => {
+    return allRows.filter((m) =>
+      m.status !== "완료" && statusFilter[m.status] !== false && overlapsRange(m, range));
+  }, [allRows, range, statusFilter]);
+
+  // 담당자명 → 화면에 표시할 마일스톤 (기간/완료 필터 적용됨)
+  const byOwnerVisible = useMemo(() => {
+    const map = {};
+    visibleRows.forEach((m) => { (map[m.owner] = map[m.owner] || []).push(m); });
+    return map;
+  }, [visibleRows]);
+
+  // 담당자명 → 전체 마일스톤 (필터 무관, '다음 배정 가능일' 계산 및 개인별 상세용)
+  const byOwnerAll = useMemo(() => {
+    const map = {};
+    allRows.forEach((m) => { (map[m.owner] = map[m.owner] || []).push(m); });
+    return map;
+  }, [allRows]);
+
+  // 타임라인에 표시할 날짜 구간
+  const domain = useMemo(() => {
+    if (range) return range;
+    const dates = [];
+    visibleRows.forEach((m) => { if (m.startDate) dates.push(m.startDate); if (m.endDate) dates.push(m.endDate); });
+    if (dates.length === 0) {
+      const today = toLocalISO(new Date());
+      return { start: today, end: addDaysISO(today, 60) };
+    }
+    dates.sort();
+    return { start: addDaysISO(dates[0], -3), end: addDaysISO(dates[dates.length - 1], 3) };
+  }, [range, visibleRows]);
+
+  const domainStartMs = new Date(domain.start).getTime();
+  const domainEndMs = new Date(domain.end).getTime();
+  const domainSpan = Math.max(1, domainEndMs - domainStartMs);
+  const pct = (iso) => {
+    if (!iso) return 0;
+    const t = new Date(iso).getTime();
+    return Math.min(100, Math.max(0, ((t - domainStartMs) / domainSpan) * 100));
+  };
+
+  // 축 눈금: 기간이 45일 이하(이번 달/다음 달)면 '모든 일자'를, 그보다 길면 월 단위로 표시
+  const ticks = useMemo(() => {
+    const span = daysBetween(domain.start, domain.end);
+    if (span !== null && span <= 45) {
+      const arr = [];
+      const d = new Date(domain.start);
+      const end = new Date(domain.end);
+      while (d <= end) {
+        arr.push({
+          iso: toLocalISO(d),
+          label: d.getDate() === 1 || arr.length === 0 ? `${d.getMonth() + 1}/${d.getDate()}` : String(d.getDate()),
+          dow: d.getDay(),
+          daily: true,
+        });
+        d.setDate(d.getDate() + 1);
+      }
+      return arr;
+    }
+    const arr = [];
+    const d = new Date(domain.start);
+    d.setDate(1);
+    const end = new Date(domain.end);
+    while (d <= end) {
+      arr.push({ label: `${d.getMonth() + 1}월`, iso: toLocalISO(d), daily: false });
+      d.setMonth(d.getMonth() + 1);
+    }
+    return arr;
+  }, [domain]);
+  const dayPct = (86400000 / domainSpan) * 100; // 하루가 차지하는 폭(%)
+
+  const todayISO = toLocalISO(new Date());
+  const todayInDomain = domain.start <= todayISO && todayISO <= domain.end;
+
+  const categorizedMembers = useMemo(() => {
+    const groups = {};
+    RESOURCE_CATEGORIES.forEach((c) => (groups[c.key] = []));
+    groups["기타"] = [];
+    members.forEach((m) => { groups[categorizeMember(m)].push(m); });
+    Object.keys(groups).forEach((k) => {
+      groups[k].sort((a, b) => {
+        const ra = positionRank(a.position), rb = positionRank(b.position);
+        if (ra !== rb) return ra - rb;
+        return (a.name || "").localeCompare(b.name || "");
+      });
+    });
+    return groups;
+  }, [members]);
+
+  const filteredPersonList = useMemo(() => {
+    const term = personSearch.trim().toLowerCase();
+    return [...members]
+      .filter((m) => !term || m.name.toLowerCase().includes(term))
+      .sort((a, b) => {
+        const ca = categorizeMember(a), cb = categorizeMember(b);
+        if (ca !== cb) {
+          const ia = RESOURCE_CATEGORIES.findIndex((c) => c.key === ca);
+          const ib = RESOURCE_CATEGORIES.findIndex((c) => c.key === cb);
+          return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+        }
+        return (a.name || "").localeCompare(b.name || "");
+      });
+  }, [members, personSearch]);
+
+  const PRESETS = [
+    { key: "next3", label: "향후 3개월" },
+    { key: "thisMonth", label: "이번 달" },
+    { key: "nextMonth", label: "다음 달" },
+    { key: "all", label: "전체 기간" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">담당자 일정</h1>
+          <p className="text-xs text-gray-500 mt-1">담당자별 마일스톤 시작·종료일을 확인하고, 다음 프로젝트 배정 시점을 가늠해보세요.</p>
+        </div>
+        <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
+          <button onClick={() => setMode("team")}
+            className={`px-3 h-8 rounded-md text-xs font-semibold transition ${mode === "team" ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700"}`}>
+            팀별 보기
+          </button>
+          <button onClick={() => setMode("person")}
+            className={`px-3 h-8 rounded-md text-xs font-semibold transition ${mode === "person" ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700"}`}>
+            담당자별 보기
+          </button>
+        </div>
+      </div>
+
+      {mode === "team" && (
+        <>
+          <div className="bg-white border border-gray-200 rounded-xl p-3 md:p-4 space-y-2.5">
+            <div className="flex items-center flex-wrap gap-1.5">
+              <span className="text-xs font-bold text-gray-500 w-12 flex-shrink-0">기간</span>
+              {PRESETS.map((p) => (
+                <button key={p.key} onClick={() => setPreset(p.key)}
+                  className={`px-3 h-8 rounded-md text-xs font-semibold border transition ${preset === p.key ? "bg-orange-500 text-white border-orange-500 shadow-sm" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}>
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            <div className="border-t border-gray-100" />
+            <div className="flex items-center flex-wrap gap-1.5">
+              <span className="text-xs font-bold text-gray-500 w-12 flex-shrink-0">상태</span>
+              {Object.entries(SCHEDULE_STATUS_STYLES).map(([key, st]) => {
+                const on = statusFilter[key] !== false;
+                return (
+                  <button key={key} onClick={() => setStatusFilter((f) => ({ ...f, [key]: !on }))}
+                    title={on ? `${st.label} 숨기기` : `${st.label} 보이기`}
+                    className={`flex items-center gap-1.5 px-3 h-8 rounded-md text-xs font-semibold border transition ${
+                      on ? "text-gray-800 shadow-sm" : "bg-gray-100 border-transparent text-gray-400"
+                    }`}
+                    style={on ? { backgroundColor: st.chipBg, borderColor: st.bar } : {}}>
+                    <span className="w-3 h-3 rounded-sm flex-shrink-0" style={{ backgroundColor: st.bar, opacity: on ? 1 : 0.25 }} />
+                    <span className={on ? "" : "line-through"}>{st.label}</span>
+                    {on && <Icon name="check" size={11} />}
+                  </button>
+                );
+              })}
+              <span className="text-[10px] text-gray-400 ml-1.5">클릭하여 켜고 끄기 · 기간과 조합해서 필터링됩니다</span>
+            </div>
+          </div>
+
+          <AssignmentSummaryBoard
+            categories={RESOURCE_CATEGORIES}
+            categorizedMembers={categorizedMembers}
+            byOwnerAll={byOwnerAll}
+            todayISO={todayISO} />
+
+          {RESOURCE_CATEGORIES.map((cat) => (
+            <ResourceCategorySection key={cat.key} cat={cat} members={categorizedMembers[cat.key] || []}
+              byOwnerVisible={byOwnerVisible} byOwnerAll={byOwnerAll}
+              pct={pct} ticks={ticks} dayPct={dayPct} todayISO={todayISO} todayInDomain={todayInDomain}
+              onSelectProject={onSelectProject}
+              hoverProj={hoverProj} setHoverProj={setHoverProj} />
+          ))}
+          {(categorizedMembers["기타"] || []).length > 0 && (
+            <ResourceCategorySection cat={{ key: "기타", label: "기타", color: "#6B7280" }} members={categorizedMembers["기타"]}
+              byOwnerVisible={byOwnerVisible} byOwnerAll={byOwnerAll}
+              pct={pct} ticks={ticks} dayPct={dayPct} todayISO={todayISO} todayInDomain={todayInDomain}
+              onSelectProject={onSelectProject}
+              hoverProj={hoverProj} setHoverProj={setHoverProj} />
+          )}
+        </>
+      )}
+
+      {mode === "person" && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-1 bg-white border border-gray-200 rounded-xl p-4">
+            <input type="text" value={personSearch} onChange={(e) => setPersonSearch(e.target.value)}
+              placeholder="담당자 이름 검색" className="form-input mb-3" />
+            <div className="space-y-1.5 max-h-[600px] overflow-y-auto scrollbar-thin pr-1">
+              {filteredPersonList.map((m) => {
+                const rows = byOwnerAll[m.name] || [];
+                const load = ownerWorkload(rows);
+                const isSel = selectedPerson === m.name;
+                return (
+                  <button key={m.id} onClick={() => setSelectedPerson(m.name)}
+                    className={`w-full flex items-center gap-2 p-2 rounded-lg border transition text-left ${isSel ? "border-orange-300 bg-orange-50/50" : "border-transparent hover:bg-gray-50"}`}>
+                    <Avatar name={m.name} size={30} />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold text-gray-900 truncate flex items-center gap-1">
+                        {m.name}
+                        {m.position === "외주" && <span className="text-[8px] text-white px-1 py-0.5 rounded font-bold bg-gray-400">외주</span>}
+                      </div>
+                      <div className="text-[10px] text-gray-500 truncate">{m.title || "-"} · {categorizeMember(m)}</div>
+                    </div>
+                    {load.remaining > 0 && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 flex-shrink-0">배정 {load.remaining}</span>}
+                  </button>
+                );
+              })}
+              {filteredPersonList.length === 0 && (
+                <div className="text-sm text-gray-400 text-center py-8">검색 결과가 없습니다</div>
+              )}
+            </div>
+          </div>
+          <div className="lg:col-span-2">
+            {selectedPerson ? (
+              <PersonMilestoneDetail
+                name={selectedPerson}
+                rows={(byOwnerAll[selectedPerson] || []).slice().sort((a, b) => (a.startDate || a.endDate || "9999").localeCompare(b.startDate || b.endDate || "9999"))}
+                onSelectProject={onSelectProject}
+              />
+            ) : (
+              <div className="h-full min-h-[300px] flex items-center justify-center bg-white border border-dashed border-gray-200 rounded-xl text-sm text-gray-400">
+                왼쪽에서 담당자를 선택하세요
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 배정 한눈에 보기 - 카테고리별로 '언제 누가 비는지'를 빨리 비는 순으로 정렬해서 요약
+function AssignmentSummaryBoard({ categories, categorizedMembers, byOwnerAll, todayISO }) {
+  const availMeta = (nextAvail) => {
+    if (!nextAvail) return { label: "즉시 가능", color: "#047857", bg: "#D1FAE5" };
+    const d = daysBetween(todayISO, nextAvail);
+    if (d !== null && d <= 14) return { label: `${nextAvail.slice(5).replace("-", "/")} 이후`, color: "#B45309", bg: "#FEF3C7" };
+    return { label: `${nextAvail.slice(5).replace("-", "/")} 이후`, color: "#B91C1C", bg: "#FEE2E2" };
+  };
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-4 md:p-5">
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-1">
+        <h2 className="font-bold text-gray-900">📋 배정 한눈에 보기</h2>
+        <span className="text-[11px] text-gray-400">빨리 비는 순 정렬 · 배정 = 현재 맡고 있는 마일스톤 수(진행중+예정)</span>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {categories.map((cat) => {
+          const list = (categorizedMembers[cat.key] || []).map((m) => {
+            const rows = byOwnerAll[m.name] || [];
+            return { m, next: nextAvailableDate(rows), load: ownerWorkload(rows) };
+          }).sort((a, b) => {
+            if (!a.next && !b.next) return a.load.remaining - b.load.remaining;
+            if (!a.next) return -1;
+            if (!b.next) return 1;
+            return a.next.localeCompare(b.next);
+          });
+          return (
+            <div key={cat.key} className="border border-gray-100 rounded-lg p-3">
+              <div className="flex items-center gap-1.5 mb-2">
+                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
+                <span className="text-xs font-bold text-gray-800">{cat.label}</span>
+              </div>
+              <div className="space-y-1">
+                {list.map(({ m, next, load }, idx) => {
+                  const av = availMeta(next);
+                  return (
+                    <div key={m.id} className={`flex items-center gap-2 p-1.5 rounded-md ${idx === 0 ? "bg-emerald-50/70 border border-emerald-100" : ""}`}>
+                      <Avatar name={m.name} size={22} />
+                      <span className="text-xs font-semibold text-gray-800 truncate flex-1 min-w-0">
+                        {m.name}
+                        {idx === 0 && list.length > 1 && <span className="ml-1 text-[8px] font-bold text-white bg-emerald-500 px-1 py-0.5 rounded align-middle">추천</span>}
+                      </span>
+                      <span className="text-[10px] font-bold text-gray-500 flex-shrink-0">배정 {load.remaining}건</span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0" style={{ color: av.color, backgroundColor: av.bg }}>{av.label}</span>
+                    </div>
+                  );
+                })}
+                {list.length === 0 && <div className="text-[11px] text-gray-300 text-center py-2">담당자 없음</div>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// 카테고리(기획/디자인/개발)별 섹션 - 담당자별 간트 타임라인
+function ResourceCategorySection({ cat, members, byOwnerVisible, byOwnerAll, pct, ticks, dayPct, todayISO, todayInDomain, onSelectProject, hoverProj, setHoverProj }) {
+  if (members.length === 0) return null;
+  const dailyMode = ticks.length > 0 && ticks[0].daily;
+  return (
+    <div className="rounded-xl p-4 md:p-5 border" style={{ backgroundColor: cat.color + "08", borderColor: cat.color + "40" }}>
+      <div className="flex items-center gap-2 mb-3 -mx-1 px-3 py-2 rounded-lg" style={{ backgroundColor: cat.color + "1A" }}>
+        <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
+        <h2 className="font-bold text-gray-900 text-base">{cat.label}</h2>
+        <span className="text-xs text-gray-500 font-semibold">{members.length}명</span>
+        <span className="ml-auto text-[10px] text-gray-500 hidden md:block">같은 줄 = 같은 프로젝트 · 막대에 마우스를 올리면 같은 프로젝트가 하이라이트됩니다</span>
+      </div>
+      <div className="overflow-x-auto scrollbar-thin">
+        <div style={{ minWidth: dailyMode ? "1000px" : "820px" }}>
+          <div className="grid grid-cols-[250px_1fr] mb-1">
+            <div />
+            <div className="relative h-8 border-b border-gray-200">
+              {ticks.map((t) => (
+                <div key={t.iso}
+                  className={`absolute top-0 h-full font-semibold flex items-end pb-0.5 ${t.daily ? "text-[8px]" : "text-[10px] border-l border-gray-200 pl-1"}`}
+                  style={{
+                    left: `${pct(t.iso)}%`,
+                    color: t.daily ? (t.dow === 0 ? "#DC2626" : t.dow === 6 ? "#2563EB" : "#9CA3AF") : "#9CA3AF",
+                    transform: t.daily ? "translateX(-50%)" : "none",
+                  }}>
+                  {t.label}
+                </div>
+              ))}
+              {todayInDomain && (
+                <div className="absolute top-0 z-20 pointer-events-none" style={{ left: `${pct(todayISO)}%`, transform: "translateX(-50%)" }}>
+                  <span className="inline-block bg-orange-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow whitespace-nowrap">
+                    오늘 {fmtMD(todayISO)}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="relative">
+            <div>
+              {members.map((m, idx) => {
+                const rows = byOwnerVisible[m.name] || [];
+                const { rows: laned, laneCount } = assignProjectLanes(rows);
+                const allRows = byOwnerAll[m.name] || [];
+                const nextAvail = nextAvailableDate(allRows);
+                const load = ownerWorkload(allRows);
+                return (
+                  <div key={m.id} className={`grid grid-cols-[250px_1fr] py-3 items-start border-b border-gray-200/60 ${idx % 2 === 1 ? "bg-white/70" : ""}`}>
+                    <div className="flex items-start gap-2.5 pl-1.5 pr-3 min-w-0 border-r-2" style={{ borderColor: cat.color + "33" }}>
+                      <Avatar name={m.name} size={36} />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[15px] font-bold text-gray-900 truncate">{m.name}</div>
+                        <div className="text-[11px] truncate font-semibold" style={{ color: nextAvail ? "#B45309" : "#059669" }}>
+                          {nextAvail ? `${nextAvail} 이후 가능` : "즉시 배정 가능"}
+                        </div>
+                        <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                          {load.active > 0 && <span className="text-[11px] font-bold px-1.5 py-0.5 rounded" style={{ color: "#15803D", backgroundColor: "#DCFCE7" }}>진행 {load.active}</span>}
+                          {load.planned > 0 && <span className="text-[11px] font-bold px-1.5 py-0.5 rounded" style={{ color: "#1D4ED8", backgroundColor: "#DBEAFE" }}>예정 {load.planned}</span>}
+                          {load.total > 0 && <span className="text-[11px] text-gray-500 font-bold">완료 {load.done}/{load.total}</span>}
+                        </div>
+                        {load.total > 0 && (
+                          <div className="flex items-center gap-1.5 mt-1.5">
+                            <div className="flex-1 h-2 bg-gray-200/70 rounded-full overflow-hidden">
+                              <div className="h-full bg-emerald-400" style={{ width: `${load.progress}%` }} />
+                            </div>
+                            <span className="text-[11px] text-gray-600 font-bold flex-shrink-0">{load.progress}%</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="relative" style={{ height: `${Math.max(laneCount * 25 + 4, 56)}px` }}>
+                      {laned.length === 0 ? (
+                        <div className="absolute inset-y-0 left-2 right-0 flex items-center text-[10px] text-gray-300">일정 없음</div>
+                      ) : (
+                        laned.map((r) => {
+                          const st = scheduleStyle(r.status);
+                          const accent = projectAccent(r.projectId);
+                          const left = pct(r.startDate || r.endDate);
+                          const right = pct(r.endDate || r.startDate);
+                          const width = Math.max(right - left, 1.2);
+                          const isHover = hoverProj === r.projectId;
+                          const isDim = hoverProj !== null && !isHover;
+                          return (
+                            <button key={r.key} onClick={() => onSelectProject && onSelectProject({ id: r.projectId })}
+                              onMouseEnter={() => setHoverProj && setHoverProj(r.projectId)}
+                              onMouseLeave={() => setHoverProj && setHoverProj(null)}
+                              className="absolute h-[21px] rounded text-[10px] font-semibold pl-1 pr-1.5 flex items-center transition-opacity"
+                              style={{
+                                left: `${left}%`, width: `${width}%`, top: `${r.lane * 25}px`,
+                                backgroundColor: st.bar, color: st.text,
+                                borderLeft: `4px solid ${accent}`,
+                                opacity: isDim ? 0.2 : 1,
+                                boxShadow: isHover ? `0 0 0 1.5px ${accent}` : "none",
+                                zIndex: isHover ? 5 : 2,
+                              }}
+                              title={`[${r.projectName}] ${r.name}\n${r.startDate || "?"} ~ ${r.endDate || "?"} · ${r.status}`}>
+                              <span className="truncate flex-1 text-left">
+                                {r.showProject && (
+                                  <span className="font-bold" style={{ textShadow: "0 1px 1px rgba(0,0,0,0.25)" }}>[{r.projectName}] </span>
+                                )}
+                                {r.name}
+                              </span>
+                              {r.endDate && <span className="flex-shrink-0 ml-1 font-bold opacity-90">~{fmtMD(r.endDate)}</span>}
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {/* 세로 그리드 라인 (일/월 눈금) */}
+            {ticks.map((t) => (
+              <div key={"g" + t.iso} className="absolute top-0 bottom-0 pointer-events-none border-l"
+                style={{ left: `calc(250px + (100% - 250px) * ${pct(t.iso) / 100})`, borderColor: t.daily ? "rgba(226,232,240,0.6)" : "#E2E8F0" }} />
+            ))}
+            {/* 주말 배경 (일 단위 보기) */}
+            {dailyMode && ticks.filter((t) => t.dow === 0 || t.dow === 6).map((t) => (
+              <div key={"w" + t.iso} className="absolute top-0 bottom-0 pointer-events-none"
+                style={{
+                  left: `calc(250px + (100% - 250px) * ${pct(t.iso) / 100})`,
+                  width: `calc((100% - 250px) * ${dayPct / 100})`,
+                  backgroundColor: t.dow === 0 ? "rgba(254,202,202,0.25)" : "rgba(191,219,254,0.25)",
+                }} />
+            ))}
+            {todayInDomain && (
+              <div className="absolute top-0 bottom-0 border-l-2 border-orange-400 z-10 pointer-events-none"
+                style={{ left: `calc(250px + (100% - 250px) * ${pct(todayISO) / 100})` }} title="오늘" />
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 담당자별 상세 - 시간순 마일스톤 리스트 + 다음 배정 가능일
+function PersonMilestoneDetail({ name, rows, onSelectProject }) {
+  const nextAvail = nextAvailableDate(rows);
+  const upcoming = rows.filter((r) => r.status !== "완료");
+  const load = ownerWorkload(rows);
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-5">
+      <div className="flex items-center gap-3 mb-4">
+        <Avatar name={name} size={40} />
+        <div className="flex-1">
+          <div className="font-bold text-gray-900">{name}</div>
+          <div className="text-[11px] text-gray-500">마일스톤 {rows.length}건</div>
+        </div>
+        <div className="text-right">
+          <div className="text-[10px] text-gray-400 uppercase font-semibold">다음 배정 가능일</div>
+          <div className="text-sm font-bold" style={{ color: nextAvail ? "#B45309" : "#059669" }}>
+            {nextAvail ? nextAvail : "즉시 가능"}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-4 gap-2 mb-3">
+        <DetailField label="진행중" value={`${load.active}건`} />
+        <DetailField label="예정" value={`${load.planned}건`} />
+        <DetailField label="완료" value={`${load.done}건`} />
+        <DetailField label="진척도" value={`${load.progress}%`} />
+      </div>
+      {load.total > 0 && (
+        <div className="mb-4">
+          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+            <div className="h-full bg-emerald-400" style={{ width: `${load.progress}%` }} />
+          </div>
+        </div>
+      )}
+
+      {rows.length === 0 ? (
+        <div className="text-sm text-gray-400 text-center py-10">등록된 마일스톤이 없습니다</div>
+      ) : (
+        <div className="space-y-4">
+          {upcoming.length > 0 && (
+            <div>
+              <h4 className="text-xs font-bold text-gray-500 uppercase mb-2">예정 · 진행 · 보류 ({upcoming.length})</h4>
+              <div className="space-y-1.5">
+                {upcoming.map((r) => (
+                  <button key={r.key} onClick={() => onSelectProject && onSelectProject({ id: r.projectId })}
+                    className="w-full text-left p-2.5 border border-gray-200 rounded-lg hover:border-orange-200 hover:bg-orange-50/30 transition flex items-center gap-2">
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${r.projectType === "구축PJ" ? "bg-blue-50 text-blue-700" : "bg-emerald-50 text-emerald-700"}`}>{r.projectType}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold text-gray-800 truncate">{r.projectName} · {r.name}</div>
+                      <div className="text-[11px] text-gray-500">{r.startDate || "-"} ~ {r.endDate || "-"}</div>
+                    </div>
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0" style={{ color: scheduleStyle(r.status).chipText, backgroundColor: scheduleStyle(r.status).chipBg }}>{r.status}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ============== 팀 관리 뷰 ==============
 function TeamsView({ teams, members, projects, vacations = [], onUpsertTeam, onDeleteTeam, onUpsertMember, onDeleteMember, onUpsertVacation, onDeleteVacation, onSelectPerson }) {
